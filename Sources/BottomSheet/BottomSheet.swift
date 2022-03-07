@@ -9,10 +9,10 @@
 import SwiftUI
 
 public struct BottomSheet<Content: View>: View {
-    
+
     private var dragToDismissThreshold: CGFloat { height * 0.2 }
     private var grayBackgroundOpacity: Double { isPresented ? (0.4 - Double(draggedOffset)/600) : 0 }
-    
+
     @State private var draggedOffset: CGFloat = 0
     @State private var previousDragValue: DragGesture.Value?
 
@@ -24,7 +24,9 @@ public struct BottomSheet<Content: View>: View {
     private let contentBackgroundColor: Color
     private let topBarBackgroundColor: Color
     private let showTopIndicator: Bool
-    
+
+    var dismissAction: () -> Void
+
     public init(
         isPresented: Binding<Bool>,
         height: CGFloat,
@@ -33,6 +35,7 @@ public struct BottomSheet<Content: View>: View {
         topBarBackgroundColor: Color = Color(.systemBackground),
         contentBackgroundColor: Color = Color(.systemBackground),
         showTopIndicator: Bool,
+        dismissAction: @escaping () -> Void,
         @ViewBuilder content: () -> Content
     ) {
         self.topBarBackgroundColor = topBarBackgroundColor
@@ -46,9 +49,10 @@ public struct BottomSheet<Content: View>: View {
             self.topBarCornerRadius = topBarHeight / 3
         }
         self.showTopIndicator = showTopIndicator
+        self.dismissAction = dismissAction
         self.content = content()
     }
-    
+
     public var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -65,20 +69,25 @@ public struct BottomSheet<Content: View>: View {
                 .background(self.contentBackgroundColor)
                 .cornerRadius(self.topBarCornerRadius, corners: [.topLeft, .topRight])
                 .animation(.interactiveSpring())
-                .offset(y: self.isPresented ? (geometry.size.height/2 - self.height/2 + geometry.safeAreaInsets.bottom + self.draggedOffset) : (geometry.size.height/2 + self.height/2 + geometry.safeAreaInsets.bottom))
+                .offset(y: self.isPresented ?
+                        (geometry.size.height/2 - self.height/2 + geometry.safeAreaInsets.bottom + self.draggedOffset):
+                            (geometry.size.height/2 + self.height/2 + geometry.safeAreaInsets.bottom))
             }
         }
     }
-    
+
     fileprivate func fullScreenLightGrayOverlay() -> some View {
         Color
             .black
             .opacity(grayBackgroundOpacity)
             .edgesIgnoringSafeArea(.all)
             .animation(.interactiveSpring())
-            .onTapGesture { self.isPresented = false }
+            .onTapGesture {
+                self.isPresented = false
+                dismissAction()
+            }
     }
-    
+
     fileprivate func topBar(geometry: GeometryProxy) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 6)
@@ -91,10 +100,10 @@ public struct BottomSheet<Content: View>: View {
         .gesture(
             DragGesture()
                 .onChanged({ (value) in
-                    
+
                     let offsetY = value.translation.height
                     self.draggedOffset = offsetY
-                    
+
                     if let previousValue = self.previousDragValue {
                         let previousOffsetY = previousValue.translation.height
                         let timeDiff = Double(value.time.timeIntervalSince(previousValue.time))
@@ -102,20 +111,21 @@ public struct BottomSheet<Content: View>: View {
                         let velocityY = heightDiff / timeDiff
                         if velocityY > 1400 {
                             self.isPresented = false
+                            dismissAction()
                             return
                         }
                     }
                     self.previousDragValue = value
-                    
+
                 })
                 .onEnded({ (value) in
                     let offsetY = value.translation.height
                     if offsetY > self.dragToDismissThreshold {
                         self.isPresented = false
+                        dismissAction()
                     }
                     self.draggedOffset = 0
                 })
         )
     }
 }
-
